@@ -125,11 +125,11 @@ const EntityListScreen = ({ navigation, route }: EntityListScreenProps) => {
       if (entityType === "order") {
         const parent = navigation.getParent();
         // Use type assertion to ensure TypeScript knows we're passing correct params
-        parent?.navigate("OrderInputScreen" as never, { order: entity as Order } as never);
+        parent?.navigate("OrderInputScreen" as any, { order: entity as Order } as any);
       } else {
         const parent = navigation.getParent();
         // Use type assertion to ensure TypeScript knows we're passing correct params
-        parent?.navigate("PlanInputScreen" as never, { plan: entity as Plan } as never);
+        parent?.navigate("PlanInputScreen" as any, { plan: entity as Plan } as any);
       }
     };
 
