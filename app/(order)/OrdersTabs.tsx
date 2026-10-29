@@ -2,7 +2,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Colors } from "../../constants/colors";
 import IconButton from "../../components/shared/IconButton";
 import { turkishStrings } from "../../constants/strings";
-import { MaterialIcons } from "@expo/vector-icons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import EntityListScreen from "../(entity)/EntityListScreen";
 
 export type OrderTabsParamList = {

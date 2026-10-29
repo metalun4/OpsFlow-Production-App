@@ -1,55 +1,25 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { StyleSheet, View, Text } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import LabeledView from "../LabeledView";
-import { Customer, Recipe } from "../../../constants/types";
+import { DropdownItem, DropdownProps, getDisplayText } from "./types";
 
-type DropdownProps = {
-  title: string;
-  items: any[];
-  selectedItem: any;
-  handleSelect: (item: any) => void;
-  disabled: boolean;
-  buttonText: string;
-};
-
-const Dropdown = ({
+const Dropdown = <T extends DropdownItem,>({
   title,
   items,
   selectedItem,
   handleSelect,
   disabled,
   buttonText,
-}: DropdownProps) => {
-  const [selectedValue, setSelectedValue] = useState<string | null>(
-    selectedItem ? selectedItem.id.toString() : null,
-  );
-
-  useEffect(() => {
-    if (selectedItem) {
-      setSelectedValue(selectedItem.id.toString());
-    } else {
-      setSelectedValue(null);
-    }
-  }, [selectedItem]);
-
+}: DropdownProps<T>) => {
   const handleValueChange = (itemValue: string) => {
     if (itemValue === "default") {
       handleSelect(null);
     } else {
-      setSelectedValue(itemValue);
       const selectedObject = items.find((item) => item.id.toString() === itemValue);
       if (selectedObject) {
         handleSelect(selectedObject);
       }
-    }
-  };
-
-  const getDisplayText = (item: Recipe | Customer) => {
-    if ("revisionNo" in item) {
-      return `${item.recipeName} R:${item.revisionNo}`;
-    } else {
-      return item.customerName;
     }
   };
 
@@ -65,7 +35,7 @@ const Dropdown = ({
       >
         {items.length > 0 ? (
           <Picker
-            selectedValue={selectedValue || ""}
+            selectedValue={selectedItem?.id.toString() ?? "default"}
             onValueChange={handleValueChange}
             enabled={!disabled}
             mode={"dropdown"}
@@ -112,4 +82,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default React.memo(Dropdown);
+export default React.memo(Dropdown) as typeof Dropdown;

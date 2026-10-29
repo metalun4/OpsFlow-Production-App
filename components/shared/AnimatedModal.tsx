@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { FontAwesome5 } from "@expo/vector-icons";
+import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import { Colors } from "../../constants/colors";
 import { turkishStrings } from "../../constants/strings";
 

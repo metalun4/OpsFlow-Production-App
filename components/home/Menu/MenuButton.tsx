@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors } from "../../../constants/colors";
 
-import { FontAwesome5 } from "@expo/vector-icons";
+import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import { NavigationProp, ParamListBase, useNavigation } from "@react-navigation/native";
 
 type MenuButtonProps = {

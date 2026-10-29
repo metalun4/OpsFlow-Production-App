@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import RNDateTimePicker from "@react-native-community/datetimepicker";
-import { MaterialIcons } from "@expo/vector-icons";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import RNDateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { format } from "date-fns";
 import LabeledView from "./LabeledView";
 import { tr } from "date-fns/locale";
@@ -48,7 +48,7 @@ const DateDropdown = ({
     return format(date, dateFormat, { locale: tr });
   };
 
-  const onChange = (event: any, selectedDate?: Date) => {
+  const onChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     setShowPicker(false);
 
     if (event.type === "set" && selectedDate) {
@@ -73,6 +73,7 @@ const DateDropdown = ({
           style={styles.dropdownButton}
           onPress={() => {
             if (disabled) return;
+            setTemporarySelected(selectedDate);
             isIOS ? setModalVisible(true) : setShowPicker(true);
           }}
           disabled={disabled}
@@ -121,8 +122,6 @@ const DateDropdown = ({
     </View>
   );
 };
-
-import { Platform } from "react-native";
 
 const styles = StyleSheet.create({
   container: {

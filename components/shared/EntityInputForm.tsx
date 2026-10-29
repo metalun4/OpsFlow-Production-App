@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Alert, StyleSheet, TextInput, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { NavigationProp, ParamListBase, useNavigation } from "@react-navigation/native";
 import { Colors } from "../../constants/colors";
 import { turkishStrings } from "../../constants/strings";
@@ -32,22 +32,35 @@ const EntityInputForm = ({
   loadingStates,
 }: EntityInputFormProps) => {
   const navigation: NavigationProp<ParamListBase> = useNavigation();
-  const today = new Date();
-  const tomorrow = new Date(+today + 86400000);
+  const [tomorrow] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  });
 
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [recipeId, setRecipeId] = useState<number | null>(currentEntity?.recipeId ?? null);
+  const [customerId, setCustomerId] = useState<number | null>(currentEntity?.customerId ?? null);
+  const selectedRecipe = recipes.find((recipe) => recipe.id === recipeId) ?? null;
+  const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null;
+
+  const onCustomerSelect = (customer: Customer | null) => {
+    setCustomerId(customer?.id ?? null);
+    setRecipeId(null);
+  };
+  const onRecipeSelect = (recipe: Recipe | null) => setRecipeId(recipe?.id ?? null);
   const [isDetailsVisible, setIsDetailsVisible] = useState<boolean>(false);
 
   // Order-specific state
   const [orderAmount, setOrderAmount] = useState<string>(
     entityType === "order" ? (currentEntity as Order)?.amount?.toString() || "1" : "1",
   );
-  const [shipmentDate, setShipmentDate] = useState<Date>(
-    entityType === "order"
-      ? new Date((currentEntity as Order)?.shipmentDate || +new Date() + 86400000)
-      : tomorrow,
-  );
+  const [shipmentDate, setShipmentDate] = useState<Date>(() => {
+    const date = entityType === "order"
+      ? new Date((currentEntity as Order)?.shipmentDate || tomorrow)
+      : tomorrow;
+    return Number.isFinite(date.getTime()) ? date : tomorrow;
+  });
 
   // Plan-specific state
   const [batchCount, setBatchCount] = useState<string>(
@@ -58,52 +71,18 @@ const EntityInputForm = ({
   );
 
   // Filter recipes based on selected customer
-  const filteredRecipes = selectedCustomer
-    ? recipes.filter((recipe) => recipe.customerId === selectedCustomer.id)
-    : recipes;
-
-  // Effect for entity initialization and dependency tracking
-  useEffect(() => {
-    if (!currentEntity || recipes.length === 0 || customers.length === 0) {
-      return;
-    }
-
-    const foundRecipe = recipes.find((r) => r.id === currentEntity.recipeId);
-    const foundCustomer = customers.find((c) => c.id === currentEntity.customerId);
-
-    if (foundRecipe && (!selectedRecipe || selectedRecipe.id !== foundRecipe.id)) {
-      setSelectedRecipe(foundRecipe);
-    }
-
-    if (foundCustomer && (!selectedCustomer || selectedCustomer.id !== foundCustomer.id)) {
-      setSelectedCustomer(foundCustomer);
-    }
-  }, [
-    currentEntity?.recipeId,
-    currentEntity?.customerId,
-    recipes,
-    customers,
-    selectedRecipe?.id,
-    selectedCustomer?.id,
-  ]);
-
-  // Reset selected recipe when customer changes
-  useEffect(() => {
-    if (!selectedCustomer) {
-      setSelectedRecipe(null);
-    }
-    if (selectedRecipe && selectedCustomer && selectedRecipe.customerId !== selectedCustomer.id) {
-      setSelectedRecipe(null);
-    }
-  }, [selectedCustomer, selectedRecipe]);
+  const filteredRecipes = useMemo(
+    () => recipes.filter((recipe) => recipe.customerId === customerId),
+    [recipes, customerId],
+  );
 
   // Parse input values
-  const parsedAmount = parseInt(orderAmount);
-  const parsedBatchCount = parseInt(batchCount);
-  const parsedMultiplier = parseFloat(multiplier);
+  const parsedAmount = Number(orderAmount);
+  const parsedBatchCount = Number(batchCount);
+  const parsedMultiplier = Number(multiplier.replace(",", "."));
 
   // Input validation
-  const validateInputs = React.useCallback(() => {
+  const validateInputs = () => {
     const errors = [];
 
     if (!selectedCustomer) {
@@ -112,24 +91,39 @@ const EntityInputForm = ({
 
     if (!selectedRecipe) {
       errors.push("Reçete seçilmedi");
+    } else if (selectedRecipe.customerId !== selectedCustomer?.id) {
+      errors.push("Reçete seçilen müşteriye ait değil");
     }
 
     if (entityType === "order") {
-      if (isNaN(parsedAmount) || parsedAmount < 1 || parsedAmount > 99999) {
+      if (
+        !/^\d+$/.test(orderAmount) ||
+        !Number.isInteger(parsedAmount) ||
+        parsedAmount < 1 ||
+        parsedAmount > 99999
+      ) {
         errors.push("Miktar 1 ile 99999 ton arasında olmalı");
       }
+      if (!Number.isFinite(shipmentDate.getTime())) {
+        errors.push("Geçerli bir sevkiyat tarihi seçilmeli");
+      }
     } else {
-      if (isNaN(parsedBatchCount) || parsedBatchCount < 1 || parsedBatchCount > 99999) {
+      if (
+        !/^\d+$/.test(batchCount) ||
+        !Number.isInteger(parsedBatchCount) ||
+        parsedBatchCount < 1 ||
+        parsedBatchCount > 99999
+      ) {
         errors.push("Batch sayısı 1 ile 99999 arasında olmalı");
       }
 
       if (
-        isNaN(parsedMultiplier) ||
-        multiplier.length > 5 ||
+        !/^\d+(?:[.,]\d{1,2})?$/.test(multiplier) ||
+        !Number.isFinite(parsedMultiplier) ||
         parsedMultiplier <= 0 ||
         parsedMultiplier > 99999.99
       ) {
-        errors.push("Çarpan 0'dan büyük veya 99999.9'dan küçük olmalı");
+        errors.push("Çarpan 0'dan büyük ve en fazla 99999.99 olmalı (en fazla 2 ondalık basamak)");
       }
     }
 
@@ -141,18 +135,11 @@ const EntityInputForm = ({
     }
 
     return true;
-  }, [
-    entityType,
-    selectedCustomer,
-    selectedRecipe,
-    parsedAmount,
-    parsedBatchCount,
-    parsedMultiplier,
-    multiplier,
-  ]);
+  };
 
   // Save handler
   const onSave = () => {
+    if (loadingStates.isLoading || loadingStates.isError || loadingStates.isMutating) return;
     if (!validateInputs()) {
       return;
     }
@@ -162,7 +149,7 @@ const EntityInputForm = ({
     if (entityType === "order") {
       entityData = {
         amount: parsedAmount,
-        shipmentDate: shipmentDate,
+        shipmentDate: shipmentDate.toISOString(),
         recipeId: selectedRecipe!.id,
         customerId: selectedCustomer!.id,
       } as OrderData;
@@ -274,12 +261,13 @@ const EntityInputForm = ({
 
   return (
     <View style={styles.container}>
+      {loadingStates.isError ? <Text>{turkishStrings.errors.somethingHappened}</Text> : null}
       <View style={styles.dropdownContainer}>
         <Dropdown
           title={turkishStrings.main.customer}
           items={customers}
           selectedItem={selectedCustomer}
-          handleSelect={setSelectedCustomer}
+          handleSelect={onCustomerSelect}
           disabled={!!currentEntity || customers.length <= 0}
           buttonText={
             loadingStates.isLoading
@@ -291,7 +279,7 @@ const EntityInputForm = ({
           title={turkishStrings.main.recipe}
           items={filteredRecipes}
           selectedItem={selectedRecipe}
-          handleSelect={setSelectedRecipe}
+          handleSelect={onRecipeSelect}
           disabled={!!currentEntity || !selectedCustomer || recipes.length <= 0}
           buttonText={
             loadingStates.isLoading
@@ -306,7 +294,7 @@ const EntityInputForm = ({
         <PrimaryButton
           onPress={onSave}
           color={Colors.green}
-          disabled={loadingStates.isMutating || loadingStates.isLoading}
+          disabled={loadingStates.isMutating || loadingStates.isLoading || loadingStates.isError}
           style={styles.actionButton}
         >
           {currentEntity ? turkishStrings.main.save : turkishStrings.main.add}

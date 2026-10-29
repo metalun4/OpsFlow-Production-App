@@ -18,7 +18,7 @@ export interface PlanData {
 export interface Order {
   id: number;
   amount: number;
-  shipmentDate: Date | null;
+  shipmentDate: string | null;
   isApproved: number;
   customerId: number;
   recipeId: number;
@@ -26,7 +26,7 @@ export interface Order {
 
 export interface OrderData {
   amount: number;
-  shipmentDate: Date | null;
+  shipmentDate: string | null;
   isApproved?: number;
   customerId: number;
   recipeId: number;

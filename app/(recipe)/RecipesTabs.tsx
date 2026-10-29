@@ -2,7 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import RecipesScreen from "./RecipesScreen";
 import { Colors } from "../../constants/colors";
-import { MaterialIcons } from "@expo/vector-icons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import IconButton from "../../components/shared/IconButton";
 import { turkishStrings } from "../../constants/strings";
 

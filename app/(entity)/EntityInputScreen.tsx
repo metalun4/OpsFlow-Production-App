@@ -1,4 +1,4 @@
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { Alert, Keyboard, StyleSheet, TouchableWithoutFeedback, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../Main";
@@ -26,6 +26,7 @@ type EntityInputScreenProps =
 const EntityInputScreen = ({ route, navigation }: EntityInputScreenProps) => {
   // Determine entity type based on the route name
   const entityType = route.name === "OrderInputScreen" ? "order" : "plan";
+  const mutationPending = useRef(false);
 
   // Safely access the current entity based on the entity type
   const currentEntity =
@@ -64,6 +65,12 @@ const EntityInputScreen = ({ route, navigation }: EntityInputScreenProps) => {
     isError: isCustomersErr,
   } = useGetCustomersQuery();
 
+  // Existing entities may reference an inactive recipe; keep it available when editing.
+  const availableRecipes = useMemo(
+    () => recipes.filter((recipe) => recipe.isActive || recipe.id === currentEntity?.recipeId),
+    [recipes, currentEntity?.recipeId],
+  );
+
   // Order mutations
   const [addOrder, { isLoading: isAddingOrder }] = useAddOrderMutation();
   const [updateOrder, { isLoading: isUpdatingOrder }] = useUpdateOrderMutation();
@@ -91,6 +98,7 @@ const EntityInputScreen = ({ route, navigation }: EntityInputScreenProps) => {
   };
 
   const onDelete = () => {
+    if (mutationPending.current) return;
     const message = "Bu öğeyi silmek istediğinize emin misiniz?";
 
     Alert.alert(turkishStrings.main.warning, message, [
@@ -104,7 +112,8 @@ const EntityInputScreen = ({ route, navigation }: EntityInputScreenProps) => {
   };
 
   const handleDelete = async () => {
-    if (!currentEntity) return;
+    if (!currentEntity || mutationPending.current) return;
+    mutationPending.current = true;
 
     try {
       if (entityType === "order") {
@@ -119,15 +128,20 @@ const EntityInputScreen = ({ route, navigation }: EntityInputScreenProps) => {
       } else {
         displayError("Bir şey oldu");
       }
+    } finally {
+      mutationPending.current = false;
     }
   };
 
   const handleSubmit = async (entityData: OrderData | PlanData) => {
+    if (mutationPending.current) return;
+    mutationPending.current = true;
     try {
       if (entityType === "order") {
         if (currentEntity) {
           await updateOrder({
             id: (currentEntity as Order).id,
+            isApproved: (currentEntity as Order).isApproved,
             ...entityData,
           }).unwrap();
         } else {
@@ -150,6 +164,8 @@ const EntityInputScreen = ({ route, navigation }: EntityInputScreenProps) => {
       } else {
         displayError("Bir şey oldu");
       }
+    } finally {
+      mutationPending.current = false;
     }
   };
 
@@ -163,10 +179,11 @@ const EntityInputScreen = ({ route, navigation }: EntityInputScreenProps) => {
       <View style={styles.container}>
         {formTitle}
         <EntityInputForm
+          key={`${entityType}-${currentEntity?.id ?? "new"}`}
           entityType={entityType}
           currentEntity={currentEntity}
           customers={customers}
-          recipes={recipes.filter((recipe) => recipe.isActive)}
+          recipes={availableRecipes}
           submitHandler={handleSubmit}
           loadingStates={loadingStates}
         />

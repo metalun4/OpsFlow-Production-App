@@ -1,32 +1,27 @@
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Picker } from "@react-native-picker/picker";
-import { MaterialIcons } from "@expo/vector-icons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import LabeledView from "../LabeledView";
-import { Customer, Recipe } from "../../../constants/types";
 import AnimatedModal from "../AnimatedModal";
+import { DropdownItem, DropdownProps, getDisplayText } from "./types";
 
-type DropdownProps = {
-  title: string;
-  items: any[];
-  selectedItem: any;
-  handleSelect: (item: any) => void;
-  disabled: boolean;
-  buttonText: string;
-};
-
-const Dropdown = ({
+const Dropdown = <T extends DropdownItem,>({
   title,
   items,
   selectedItem,
   handleSelect,
   disabled,
   buttonText,
-}: DropdownProps) => {
+}: DropdownProps<T>) => {
   const [modalVisible, setModalVisible] = useState<boolean>(false);
-  const [temporarySelected, setTemporarySelected] = useState<string>(
-    selectedItem ? selectedItem.id.toString() : items[0].id.toString(),
-  );
+  const [temporarySelected, setTemporarySelected] = useState<string>("");
+
+  const onOpen = () => {
+    if (disabled || items.length === 0) return;
+    setTemporarySelected((selectedItem ?? items[0]).id.toString());
+    setModalVisible(true);
+  };
 
   const onConfirm = () => {
     if (temporarySelected) {
@@ -39,18 +34,7 @@ const Dropdown = ({
 
   const onClose = () => {
     // Reset temporary selection to current selected item
-    setTemporarySelected(selectedItem ? selectedItem.id.toString() : null);
     setModalVisible(false);
-  };
-
-  const getDisplayText = (item: Recipe | Customer | null) => {
-    if (!item) return buttonText;
-
-    if ("revisionNo" in item) {
-      return `${item.recipeName} R:${item.revisionNo}`;
-    } else {
-      return item.customerName;
-    }
   };
 
   return (
@@ -65,11 +49,11 @@ const Dropdown = ({
       >
         <Pressable
           style={styles.dropdownButton}
-          onPress={() => !disabled && setModalVisible(true)}
-          disabled={disabled}
+          onPress={onOpen}
+          disabled={disabled || items.length === 0}
         >
           <Text style={[styles.selectedText, disabled && styles.selectedTextDisabled]}>
-            {getDisplayText(selectedItem)}
+            {selectedItem ? getDisplayText(selectedItem) : buttonText}
           </Text>
           {!disabled && <MaterialIcons name="arrow-drop-down" size={32} color="black" />}
         </Pressable>
@@ -133,4 +117,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default React.memo(Dropdown);
+export default React.memo(Dropdown) as typeof Dropdown;

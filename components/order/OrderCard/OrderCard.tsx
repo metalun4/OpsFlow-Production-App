@@ -1,10 +1,10 @@
-import React from "react";
+import React, { useRef } from "react";
 import Card from "../../shared/Card";
 import { Alert, StyleSheet, Text, View } from "react-native";
-import { Customer, Order, OrderData, Recipe } from "../../../constants/types";
+import { Customer, Order, Recipe } from "../../../constants/types";
 import LabeledView from "../../shared/LabeledView";
 import { turkishStrings } from "../../../constants/strings";
-import { format, formatDistanceToNowStrict } from "date-fns";
+import { format, formatDistanceToNowStrict, isValid } from "date-fns";
 import { tr } from "date-fns/locale";
 import PrimaryButton from "../../shared/PrimaryButton";
 import OrderCardTitle from "./OrderCardTitle";
@@ -18,15 +18,26 @@ export type OrderCardProps = {
   onPress: () => void;
 };
 const OrderCard = ({ order, recipe, customer, onPress }: OrderCardProps) => {
-  const [updateOrder] = useUpdateOrderMutation();
-  const orderData: OrderData = {
-    amount: order.amount,
-    shipmentDate: order.shipmentDate,
-    recipeId: order.recipeId,
-    customerId: order.customerId,
+  const [updateOrder, { isLoading }] = useUpdateOrderMutation();
+  const mutationPending = useRef(false);
+  const shipmentDate = order.shipmentDate ? new Date(order.shipmentDate) : null;
+
+  const changeStatus = async (isApproved: number) => {
+    if (mutationPending.current) return;
+    mutationPending.current = true;
+    try {
+      await updateOrder({
+        id: order.id, amount: order.amount, shipmentDate: order.shipmentDate, isApproved,
+      }).unwrap();
+    } catch {
+      Alert.alert(turkishStrings.main.warning, turkishStrings.errors.somethingHappened);
+    } finally {
+      mutationPending.current = false;
+    }
   };
 
   const displayConfirmation = (status: "approve" | "reject" | "hold") => {
+    if (mutationPending.current) return;
     Alert.alert(
       turkishStrings.main.warning,
       "Siparişin durumunu değiştirmek istediğinize emin misiniz?",
@@ -34,40 +45,11 @@ const OrderCard = ({ order, recipe, customer, onPress }: OrderCardProps) => {
         {
           text: turkishStrings.main.yes,
           style: "default",
-          onPress: () => {
-            if (status === "approve") {
-              approve();
-            } else if (status === "reject") {
-              reject();
-            } else if (status === "hold") {
-              putOnHold();
-            }
-          },
+          onPress: () => changeStatus(status === "approve" ? 1 : status === "reject" ? -1 : 0),
         },
         { text: turkishStrings.main.no, style: "cancel" },
       ],
     );
-  };
-  const approve = async () => {
-    await updateOrder({
-      id: order.id,
-      ...orderData,
-      isApproved: 1,
-    });
-  };
-  const putOnHold = async () => {
-    await updateOrder({
-      id: order.id,
-      ...orderData,
-      isApproved: 0,
-    });
-  };
-  const reject = async () => {
-    await updateOrder({
-      id: order.id,
-      ...orderData,
-      isApproved: -1,
-    });
   };
 
   const renderButtons = () => {
@@ -77,6 +59,7 @@ const OrderCard = ({ order, recipe, customer, onPress }: OrderCardProps) => {
           <PrimaryButton
             style={styles.button}
             onPress={() => displayConfirmation("approve")}
+            disabled={isLoading}
             color={Colors.green}
           >
             {turkishStrings.main.approve}
@@ -84,6 +67,7 @@ const OrderCard = ({ order, recipe, customer, onPress }: OrderCardProps) => {
           <PrimaryButton
             style={styles.button}
             onPress={() => displayConfirmation("reject")}
+            disabled={isLoading}
             color={Colors.red}
           >
             {turkishStrings.main.cancel}
@@ -96,6 +80,7 @@ const OrderCard = ({ order, recipe, customer, onPress }: OrderCardProps) => {
           <PrimaryButton
             style={styles.button}
             onPress={() => displayConfirmation("hold")}
+            disabled={isLoading}
             color={Colors.blue}
           >
             {turkishStrings.orders.putOnHold}
@@ -103,6 +88,7 @@ const OrderCard = ({ order, recipe, customer, onPress }: OrderCardProps) => {
           <PrimaryButton
             style={styles.button}
             onPress={() => displayConfirmation("reject")}
+            disabled={isLoading}
             color={Colors.red}
           >
             {turkishStrings.main.cancel}
@@ -115,6 +101,7 @@ const OrderCard = ({ order, recipe, customer, onPress }: OrderCardProps) => {
           <PrimaryButton
             style={styles.button}
             onPress={() => displayConfirmation("hold")}
+            disabled={isLoading}
             color={Colors.blue}
           >
             {turkishStrings.orders.putOnHold}
@@ -122,6 +109,7 @@ const OrderCard = ({ order, recipe, customer, onPress }: OrderCardProps) => {
           <PrimaryButton
             style={styles.button}
             onPress={() => displayConfirmation("approve")}
+            disabled={isLoading}
             color={Colors.green}
           >
             {turkishStrings.main.approve}
@@ -154,17 +142,15 @@ const OrderCard = ({ order, recipe, customer, onPress }: OrderCardProps) => {
       </LabeledView>
       <LabeledView label={turkishStrings.orders.shipmentDate}>
         <Text style={styles.infoText}>
-          {format(order.shipmentDate!, "dd/MMMM/yyyy", { locale: tr })} (
-          {formatDistanceToNowStrict(order.shipmentDate!, {
-            unit: "day",
-            addSuffix: true,
-            locale: tr,
-          })}
-          )
+          {shipmentDate && isValid(shipmentDate)
+            ? `${format(shipmentDate, "dd/MMMM/yyyy", { locale: tr })} (${formatDistanceToNowStrict(shipmentDate, {
+                unit: "day", addSuffix: true, locale: tr,
+              })})`
+            : "Tarih belirtilmedi"}
         </Text>
       </LabeledView>
       <View style={styles.buttonContainer}>
-        <PrimaryButton style={styles.button} onPress={onPress}>
+        <PrimaryButton style={styles.button} onPress={onPress} disabled={isLoading}>
           {turkishStrings.main.edit}
         </PrimaryButton>
         {renderButtons()}

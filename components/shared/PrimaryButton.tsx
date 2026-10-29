@@ -48,6 +48,8 @@ const PrimaryButton = ({
       <Pressable
         onPress={onPress}
         disabled={disabled}
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
         style={({ pressed }) => [styles.buttonContainer, pressed && styles.pressed]}
       >
         <Text style={getTextStyles()}>{children}</Text>

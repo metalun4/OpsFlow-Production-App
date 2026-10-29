@@ -1,4 +1,7 @@
+import { memo, useCallback, useMemo } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../Main";
 import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import {
   useGetCustomersQuery,
@@ -9,7 +12,7 @@ import {
 import { turkishStrings } from "../../constants/strings";
 import PrimaryButton from "../../components/shared/PrimaryButton";
 import { Colors } from "../../constants/colors";
-import { Order, Plan } from "../../constants/types";
+import { Customer, Order, Plan, Recipe } from "../../constants/types";
 import OrderCard from "../../components/order/OrderCard/OrderCard";
 import PlanCard from "../../components/plan/PlanCard/PlanCard";
 import PlansHeader from "../../components/plan/PlansHeader";
@@ -24,6 +27,38 @@ type EntityListScreenProps =
       "OrdersScreen" | "ApprovedOrdersScreen" | "CanceledOrdersScreen"
     >
   | BottomTabScreenProps<PlanTabsParamList, "PlansScreen" | "ActivePlansScreen">;
+
+const EMPTY_ORDERS: Order[] = [];
+const EMPTY_PLANS: Plan[] = [];
+const EMPTY_RECIPES: Recipe[] = [];
+const EMPTY_CUSTOMERS: Customer[] = [];
+const entityKey = (entity: Order | Plan) => entity.id.toString();
+
+const EntityListItem = memo(function EntityListItem({
+  entity,
+  recipe,
+  customer,
+  entityType,
+  onEdit,
+}: {
+  entity: Order | Plan;
+  recipe: Recipe | undefined;
+  customer: Customer | undefined;
+  entityType: "order" | "plan";
+  onEdit: (entity: Order | Plan) => void;
+}) {
+  const onPress = useCallback(() => onEdit(entity), [onEdit, entity]);
+  if (!recipe || !customer) return <Text>Error with {entity.id}</Text>;
+  if (entityType === "order") {
+    return <OrderCard order={entity as Order} recipe={recipe} customer={customer} onPress={onPress} />;
+  }
+  const plan = entity as Plan;
+  return plan.currentBatch > 0 ? (
+    <PlanCardActive plan={plan} recipe={recipe} customer={customer} onPress={onPress} />
+  ) : (
+    <PlanCard plan={plan} recipe={recipe} customer={customer} onPress={onPress} />
+  );
+});
 
 const EntityListScreen = ({ navigation, route }: EntityListScreenProps) => {
   // Safely check route.params - use optional chaining and type assertions
@@ -41,7 +76,7 @@ const EntityListScreen = ({ navigation, route }: EntityListScreenProps) => {
 
   // Query data based on entity type
   const {
-    data: orders = [],
+    data: orders = EMPTY_ORDERS,
     isLoading: isOrdersLoading,
     isFetching: isOrdersFetching,
     isError: isOrdersErr,
@@ -49,7 +84,7 @@ const EntityListScreen = ({ navigation, route }: EntityListScreenProps) => {
   } = useGetOrdersQuery(undefined, { skip: !isOrderScreen });
 
   const {
-    data: plans = [],
+    data: plans = EMPTY_PLANS,
     isLoading: isPlansLoading,
     isFetching: isPlansFetching,
     isError: isPlansErr,
@@ -57,7 +92,7 @@ const EntityListScreen = ({ navigation, route }: EntityListScreenProps) => {
   } = useGetPlansQuery(undefined, { skip: !isPlanScreen });
 
   const {
-    data: recipes = [],
+    data: recipes = EMPTY_RECIPES,
     isLoading: isRecipesLoading,
     isFetching: isRecipesFetching,
     isError: isRecipesErr,
@@ -65,14 +100,44 @@ const EntityListScreen = ({ navigation, route }: EntityListScreenProps) => {
   } = useGetRecipesQuery();
 
   const {
-    data: customers = [],
+    data: customers = EMPTY_CUSTOMERS,
     isLoading: isCustomersLoading,
     isFetching: isCustomersFetching,
     isError: isCustomersErr,
     refetch: refetchCustomers,
   } = useGetCustomersQuery();
 
-  const data: boolean = !!orders && !!plans && !!recipes && !!customers;
+  const recipeById = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
+  const customerById = useMemo(
+    () => new Map(customers.map((customer) => [customer.id, customer])),
+    [customers],
+  );
+  const filteredEntities = useMemo<(Order | Plan)[]>(
+    () => entityType === "order"
+      ? orders.filter((order) => order.isApproved === orderStatus)
+      : plans.filter((plan) => plan.inBuffer === planStatus),
+    [entityType, orders, plans, orderStatus, planStatus],
+  );
+  const navigateToInputScreen = useCallback(
+    (entity: Order | Plan) => {
+      const parent = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
+      if (entityType === "order") {
+        parent?.navigate("OrderInputScreen", { order: entity as Order });
+      } else {
+        parent?.navigate("PlanInputScreen", { plan: entity as Plan });
+      }
+    },
+    [navigation, entityType],
+  );
+  const renderEntityItem = useCallback(({ item }: { item: Order | Plan }) => (
+    <EntityListItem
+      entity={item}
+      entityType={entityType}
+      recipe={recipeById.get(item.recipeId)}
+      customer={customerById.get(item.customerId)}
+      onEdit={navigateToInputScreen}
+    />
+  ), [entityType, recipeById, customerById, navigateToInputScreen]);
 
   // Calculate overall status
   const entityLoading = entityType === "order" ? isOrdersLoading : isPlansLoading;
@@ -85,7 +150,7 @@ const EntityListScreen = ({ navigation, route }: EntityListScreenProps) => {
 
   let content = null;
 
-  if (isLoading && !data) {
+  if (isLoading) {
     content = <ActivityIndicator size={"large"} color={Colors.d4} />;
   }
 
@@ -110,82 +175,18 @@ const EntityListScreen = ({ navigation, route }: EntityListScreenProps) => {
     );
   }
 
-  if (!isLoading && !isErr && data) {
-    // Filter data based on entity type and status
-    let data: (Order | Plan)[] = [];
-
-    if (entityType === "order" && orderStatus !== undefined) {
-      data = orders.filter((order: Order) => order.isApproved === orderStatus);
-    } else if (entityType === "plan" && planStatus !== undefined) {
-      data = plans.filter((plan: Plan) => plan.inBuffer === planStatus);
-    }
-
-    // Navigate to appropriate input screen with type assertion
-    const navigateToInputScreen = (entity: Order | Plan) => {
-      if (entityType === "order") {
-        const parent = navigation.getParent();
-        // Use type assertion to ensure TypeScript knows we're passing correct params
-        parent?.navigate("OrderInputScreen" as any, { order: entity as Order } as any);
-      } else {
-        const parent = navigation.getParent();
-        // Use type assertion to ensure TypeScript knows we're passing correct params
-        parent?.navigate("PlanInputScreen" as any, { plan: entity as Plan } as any);
-      }
-    };
-
-    // Render function for list items
-    const renderEntityItem = (itemData: { item: Order | Plan }) => {
-      const entity = itemData.item;
-      const recipe = recipes.find((item) => item.id === entity.recipeId);
-      const customer = customers.find((item) => item.id === entity.customerId);
-
-      if (recipe && customer) {
-        if (entityType === "order") {
-          return (
-            <OrderCard
-              order={entity as Order}
-              recipe={recipe}
-              customer={customer}
-              onPress={() => navigateToInputScreen(entity)}
-            />
-          );
-        } else {
-          const plan = entity as Plan;
-          if (plan.currentBatch > 0) {
-            return (
-              <PlanCardActive
-                plan={plan}
-                recipe={recipe}
-                customer={customer}
-                onPress={() => navigateToInputScreen(entity)}
-              />
-            );
-          }
-          return (
-            <PlanCard
-              plan={plan}
-              recipe={recipe}
-              customer={customer}
-              onPress={() => navigateToInputScreen(entity)}
-            />
-          );
-        }
-      }
-
-      return <Text>Error with {entity.id}</Text>;
-    };
-
+  if (!isLoading && !isErr) {
     content = (
       <>
         {entityType === "plan" && <PlansHeader />}
         <FlatList
-          data={data}
-          style={{ width: "100%" }}
+          data={filteredEntities}
+          style={styles.list}
           refreshing={isFetching}
           onRefresh={onRefresh}
           initialNumToRender={15}
           maxToRenderPerBatch={5}
-          keyExtractor={(item: Order | Plan) => item.id.toString()}
+          keyExtractor={entityKey}
           renderItem={renderEntityItem}
         />
       </>
@@ -198,6 +199,9 @@ const EntityListScreen = ({ navigation, route }: EntityListScreenProps) => {
 export default EntityListScreen;
 
 const styles = StyleSheet.create({
+  list: {
+    width: "100%",
+  },
   container: {
     flex: 1,
     width: "100%",
